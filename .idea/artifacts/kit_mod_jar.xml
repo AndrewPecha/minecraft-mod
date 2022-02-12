@@ -1,0 +1,10 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="kit-mod:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/kit_mod_jar</output-path>
+    <root id="archive" name="kit-mod.jar">
+      <element id="module-output" name="kit-mod" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/../../spigot-jars/spigot-api-1.18.1-R0.1-20220202.223622-61-shaded.jar" path-in-jar="/" />
+      <element id="file-copy" path="$PROJECT_DIR$/src/plugin.yml" />
+    </root>
+  </artifact>
+</component>
