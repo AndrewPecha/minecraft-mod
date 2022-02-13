@@ -7,12 +7,11 @@ public final class TrackLayerTracker {
         return playersEnabled;
     }
 
-    public static void addPlayer(String playerName) {
-        playersEnabled.add(playerName);
-    }
-
-    public static void removePlayer(String playerName) {
-        playersEnabled.remove(playerName);
+    public static void togglePlayer(String playerName) {
+        if (!playersEnabled.contains(playerName))
+            playersEnabled.add(playerName);
+        else
+            playersEnabled.remove(playerName);
     }
 
     public static ArrayList<String> playersEnabled = new ArrayList<String>();
