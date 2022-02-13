@@ -12,3 +12,6 @@ commands:
   choochoo:
     description: Lay Mine Tracks FAST
     usage: /choochoo
+  stairs:
+    description: Blocks go brrrrr
+    usage: /stairs

@@ -9,7 +9,9 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Stream;
 
 public class TrackLayerListener implements Listener {
@@ -18,8 +20,10 @@ public class TrackLayerListener implements Listener {
 
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
-        if (TrackLayerTracker.getPlayersEnabled().contains(event.getPlayer().getName())) {
+        //if player moves diagonally
+        if (TrackLayerTracker.PlayerHasChooChooEnabled(event.getPlayer())) {
 
+//            Bukkit.broadcastMessage("Player has rails: " + playerHasRails(event.getPlayer()) + "\n Player has powered rails: " + playerHasPoweredRails(event.getPlayer()));
             if (!playerHasAnyMaterialsToBuildWith(event))
                 return;
 
@@ -27,20 +31,62 @@ public class TrackLayerListener implements Listener {
             if (location == null)
                 location = playerLocation;
 
-            if (playerHasMovedOneFullBlock(playerLocation)) {
+            if (playerHasMovedOneFullBlockOnXZAxis(playerLocation)) {
+                getLastPlacedRailLocationFromPlayer(event.getPlayer());
+                //want to place redstone torches eventually too
                 if (counter == 7) {
-                    decrementPlayerPoweredRailStack(event);
-                    placeBlockAtPlayer(event, Material.POWERED_RAIL);
+                    if (playerHasPoweredRails(event.getPlayer())) {
+                        decrementPlayerPoweredRailStack(event);
+                        placeBlockAtPlayer(event, Material.POWERED_RAIL);
+                    }
                     counter = 0;
                 } else {
-                    decrementPlayerRailStack(event);
-                    placeBlockAtPlayer(event, Material.RAIL);
+                    if (playerHasRails(event.getPlayer())) {
+                        decrementPlayerRailStack(event);
+                        placeBlockAtPlayer(event, Material.RAIL);
+                    }
                     counter++;
                 }
             }
 
         }
 
+    }
+
+    private Location getLastPlacedRailLocationFromPlayer(Player player) {
+        var boxAroundPlayer = getBlockLocationsAroundPlayer(player);
+//        Bukkit.broadcastMessage("player at:\n");
+        for(Location location : boxAroundPlayer){
+            //find rail around player
+            if(player.getWorld().getBlockAt(location).getType() == Material.POWERED_RAIL || player.getWorld().getBlockAt(location).getType() == Material.RAIL)
+                return location;
+//            Bukkit.broadcastMessage("x: " + location.getX() + " y: " + location.getY() + " z: " + location.getZ());
+
+        }
+
+        return null;
+
+    }
+
+    private Location[] getBlockLocationsAroundPlayer(Player player) {
+        var playerLocation = player.getLocation();
+        List<Location> blocksAroundLocation = new ArrayList<Location>();
+        for (int y = -1; y < 2; y++) {
+            for (int x = -1; x < 2; x++) {
+                for (int z = -1; z < 2; z++) {
+                    //don't detect current location
+                    if(y == 0 && x == 0 && z == 0)
+                        continue;
+                    blocksAroundLocation.add(new Location(player.getWorld(),
+                            playerLocation.getX() + x,
+                            playerLocation.getY() + y,
+                            playerLocation.getZ() + z));
+                }
+            }
+        }
+
+        Location[] result = new Location[blocksAroundLocation.size()];
+        return blocksAroundLocation.toArray(result);
     }
 
     private boolean playerHasAnyMaterialsToBuildWith(PlayerMoveEvent event) {
@@ -82,13 +128,11 @@ public class TrackLayerListener implements Listener {
     }
 
     private boolean playerHasPoweredRails(Player player) {
-        return !getAllItemStacksInPlayersInventory(player, Material.RAIL).findAny().isEmpty();
+        return !getAllItemStacksInPlayersInventory(player, Material.POWERED_RAIL).findAny().isEmpty();
     }
 
-    private boolean playerHasMovedOneFullBlock(Location currentLocation) {
-        if ((int) currentLocation.getX() == (int) location.getX() &&
-                (int) currentLocation.getY() == (int) location.getY() &&
-                (int) currentLocation.getZ() == (int) location.getZ()) {
+    private boolean playerHasMovedOneFullBlockOnXZAxis(Location currentLocation) {
+        if ((int) currentLocation.getX() == (int) location.getX() && (int) currentLocation.getZ() == (int) location.getZ()) {
             return false;
         }
 

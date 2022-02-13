@@ -1,5 +1,8 @@
 package dev.andrewpecha.spigottest.tracklayer;
 
+import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerMoveEvent;
+
 import java.util.ArrayList;
 
 public final class TrackLayerTracker {
@@ -20,5 +23,8 @@ public final class TrackLayerTracker {
 
     }
 
+     protected static boolean PlayerHasChooChooEnabled(Player player) {
+        return TrackLayerTracker.getPlayersEnabled().contains(player.getName());
+    }
 
 }
