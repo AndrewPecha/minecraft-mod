@@ -15,6 +15,7 @@ public class Main extends JavaPlugin {
         this.getCommand("move").setExecutor(new CommandMove());
         this.getCommand("choochoo").setExecutor(new CommandChooChoo());
         this.getCommand("stairs").setExecutor(new CommandStairBlocks());
+        this.getCommand("tnt").setExecutor(new CommandTnt());
         getServer().getPluginManager().registerEvents(new TrackLayerListener(), this);
     }
 

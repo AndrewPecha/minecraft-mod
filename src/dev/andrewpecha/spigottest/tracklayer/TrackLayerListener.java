@@ -3,7 +3,6 @@ package dev.andrewpecha.spigottest.tracklayer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -16,80 +15,105 @@ import java.util.List;
 import java.util.stream.Stream;
 
 public class TrackLayerListener implements Listener {
-    private static int counter = 0;
-    private static Location location;
+    private static Location previousLocation;
 
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
         //if player moves diagonally
         if (TrackLayerTracker.PlayerHasChooChooEnabled(event.getPlayer())) {
 
-//            Bukkit.broadcastMessage("Player has rails: " + playerHasRails(event.getPlayer()) + "\n Player has powered rails: " + playerHasPoweredRails(event.getPlayer()));
+            /*
+             * Flat:
+             * IF player moved full x or z block AND NOT a y block
+             * IF last powered rail is null THEN return
+             * IF last powered rail is < 7 blocks away THEN place normal rail
+             * IF last powered rail is > 7 blocks away THEN place powered rails
+             *
+             * Escalating:
+             * IF player moved full x or z block AND a y block
+             */
             if (!playerHasAnyMaterialsToBuildWith(event))
                 return;
 
             var playerLocation = event.getPlayer().getLocation();
-            if (location == null)
-                location = playerLocation;
+            if (previousLocation == null)
+                previousLocation = playerLocation;
 
             if (playerHasMovedOneFullBlockOnXZAxis(playerLocation)) {
+
+                var railLocationNextToPlayer = getRailOrPoweredRailNextToLocation(event.getPlayer().getLocation());
                 //leave method if no rails next to player
-                var lastRailLocation = getLastPlacedRailOrPoweredRailLocationFromPlayer(event.getPlayer());
-                if(lastRailLocation == null){
-                    Bukkit.broadcastMessage("no rail detected next to player");
+                if (railLocationNextToPlayer == null) {
+//                    Bukkit.broadcastMessage("no rail detected next to player");
                     return;
                 }
 
-
-                Bukkit.broadcastMessage("" + lastPoweredRailLocationIsAtLeastTwoBlocksUpOrDownFromPlayer(event.getPlayer()));
-                if(lastPoweredRailLocationIsAtLeastTwoBlocksUpOrDownFromPlayer(event.getPlayer())) {
-                    if (playerHasPoweredRails(event.getPlayer())) {
-                        decrementPlayerPoweredRailStack(event);
-                        placeBlockAtPlayer(event, Material.POWERED_RAIL);
+                //if player has not gone up or down from the rail next to them
+                if ((int) railLocationNextToPlayer.getY() == (int) event.getPlayer().getLocation().getY()) {
+                    var lastPoweredRailXZDistance = getXZTrackCountFromLastPoweredRailLocation(event.getPlayer().getLocation());
+                    if (lastPoweredRailXZDistance < 7 && playerHasRails(event.getPlayer())) {
+                        decrementPlayerRailStack(event);
+                        placeBlockAtPlayer(event, Material.RAIL);
                     }
                 }
 
-                //want to place redstone torches eventually too
-//                if (counter == 7) {
-//                    if (playerHasPoweredRails(event.getPlayer())) {
-//                        decrementPlayerPoweredRailStack(event);
-//                        placeBlockAtPlayer(event, Material.POWERED_RAIL);
-//                    }
-//                    counter = 0;
-//                } else {
-//                    if (playerHasRails(event.getPlayer())) {
-//                        decrementPlayerRailStack(event);
-//                        placeBlockAtPlayer(event, Material.RAIL);
-//                    }
-//                    counter++;
+            }
+//                else {
+//                    Bukkit.broadcastMessage("last rail location: " + railLocationNextToPlayer.getX() + ", " + railLocationNextToPlayer.getY() + ", " + railLocationNextToPlayer.getZ());
 //                }
+
+            if (lastPoweredRailLocationIsAtLeastTwoBlocksUpOrDownFromPlayer(event.getPlayer())) {
+                if (playerHasPoweredRails(event.getPlayer())) {
+                    decrementPlayerPoweredRailStack(event);
+                    placeBlockAtPlayer(event, Material.POWERED_RAIL);
+                } else if (playerHasRails(event.getPlayer())) {
+                    decrementPlayerRailStack(event);
+                    placeBlockAtPlayer(event, Material.RAIL);
+                }
             }
 
         }
 
     }
 
+    private int getXZTrackCountFromLastPoweredRailLocation(Location inputLocation) {
+        var counter = 1;
+        Location lastLastRailLocation;
+        var lastAnyRailLocation = getRailOrPoweredRailNextToLocation(inputLocation);
+        while (lastAnyRailLocation != null && !isLocationMadeOfMaterial(lastAnyRailLocation, Material.POWERED_RAIL)) {
+            counter ++;
+            lastLastRailLocation = lastAnyRailLocation;
+            lastAnyRailLocation = getRailOrPoweredRailNextToLocationWithExclusion(lastAnyRailLocation, lastLastRailLocation);
+            Bukkit.broadcastMessage("" + counter);
+        }
+        if(lastAnyRailLocation == null)
+            return -1;
+
+        return counter;
+    }
+
     private boolean lastPoweredRailLocationIsAtLeastTwoBlocksUpOrDownFromPlayer(Player player) {
-        var locationOfLastRailOrPoweredRail = getLastPlacedRailOrPoweredRailLocationFromPlayer(player);
-        if(locationOfLastRailOrPoweredRail == null)
+        var locationOfLastRailOrPoweredRail = getRailOrPoweredRailNextToLocation(player.getLocation());
+        //if no rails next to player, false
+        if (locationOfLastRailOrPoweredRail == null)
             return false;
 
         var locationOfLastRailOrPoweredRailTwoBlocksAway =
-                getLastPlacedRailOrPoweredRailLocationFromLocation(locationOfLastRailOrPoweredRail);
+                getRailOrPoweredRailNextToLocation(locationOfLastRailOrPoweredRail);
 
-        if(Math.abs((int)locationOfLastRailOrPoweredRailTwoBlocksAway.getY() - player.getLocation().getY()) >= 2)
-            return true;
+        if (locationOfLastRailOrPoweredRailTwoBlocksAway == null)
+            return false;
 
-        return false;
+        return Math.abs((int) locationOfLastRailOrPoweredRailTwoBlocksAway.getY() - (int) player.getLocation().getY()) >= 2;
     }
 
-    private Location getLastPlacedRailOrPoweredRailLocationFromLocation(Location inputLocation) {
-        var boxAroundPlayer = getBlockLocationsAroundLocation(inputLocation);
+    private Location getRailOrPoweredRailNextToLocation(Location inputLocation) {
+        var boxAroundLocation = getBlockLocationsAroundLocation(inputLocation);
 //        Bukkit.broadcastMessage("player at:\n");
-        for(Location location : boxAroundPlayer){
+        for (Location location : boxAroundLocation) {
             //find rail around player
-            if(locationIsMaterial(inputLocation.getWorld(), location, Material.POWERED_RAIL) ||
-                    locationIsMaterial(inputLocation.getWorld(), location, Material.RAIL))
+            if (isLocationMadeOfMaterial(location, Material.POWERED_RAIL) ||
+                    isLocationMadeOfMaterial(location, Material.RAIL))
                 return location;
 //            Bukkit.broadcastMessage("x: " + location.getX() + " y: " + location.getY() + " z: " + location.getZ());
 
@@ -98,24 +122,23 @@ public class TrackLayerListener implements Listener {
         return null;
     }
 
-    private Location getLastPlacedRailOrPoweredRailLocationFromPlayer(Player player) {
-        var boxAroundPlayer = getBlockLocationsAroundPlayer(player);
+    private Location getRailOrPoweredRailNextToLocationWithExclusion(Location inputLocation, Location excludedLocation) {
+        var boxAroundLocation = getBlockLocationsAroundLocation(inputLocation);
 //        Bukkit.broadcastMessage("player at:\n");
-        for(Location location : boxAroundPlayer){
+        for (Location location : boxAroundLocation) {
             //find rail around player
-            if(locationIsMaterial(player.getWorld(), location, Material.POWERED_RAIL) ||
-                    locationIsMaterial(player.getWorld(), location, Material.RAIL))
+            if (isLocationMadeOfMaterial(location, Material.POWERED_RAIL) ||
+                    isLocationMadeOfMaterial(location, Material.RAIL) && !location.equals(excludedLocation))
                 return location;
 //            Bukkit.broadcastMessage("x: " + location.getX() + " y: " + location.getY() + " z: " + location.getZ());
 
         }
 
         return null;
-
     }
 
-    private boolean locationIsMaterial(World world, Location location, Material material) {
-        return world.getBlockAt(location).getType() == material;
+    private boolean isLocationMadeOfMaterial(Location location, Material material) {
+        return location.getWorld().getBlockAt(location).getType() == material;
     }
 
     private Location[] getBlockLocationsAroundLocation(Location inputLocation) {
@@ -124,33 +147,12 @@ public class TrackLayerListener implements Listener {
             for (int x = -1; x < 2; x++) {
                 for (int z = -1; z < 2; z++) {
                     //don't detect current location
-                    if(y == 0 && x == 0 && z == 0)
+                    if (y == 0 && x == 0 && z == 0)
                         continue;
                     blocksAroundLocation.add(new Location(inputLocation.getWorld(),
                             inputLocation.getX() + x,
                             inputLocation.getY() + y,
                             inputLocation.getZ() + z));
-                }
-            }
-        }
-
-        Location[] result = new Location[blocksAroundLocation.size()];
-        return blocksAroundLocation.toArray(result);
-    }
-
-    private Location[] getBlockLocationsAroundPlayer(Player player) {
-        var playerLocation = player.getLocation();
-        List<Location> blocksAroundLocation = new ArrayList<Location>();
-        for (int y = -1; y < 2; y++) {
-            for (int x = -1; x < 2; x++) {
-                for (int z = -1; z < 2; z++) {
-                    //don't detect current location
-                    if(y == 0 && x == 0 && z == 0)
-                        continue;
-                    blocksAroundLocation.add(new Location(player.getWorld(),
-                            playerLocation.getX() + x,
-                            playerLocation.getY() + y,
-                            playerLocation.getZ() + z));
                 }
             }
         }
@@ -202,16 +204,20 @@ public class TrackLayerListener implements Listener {
     }
 
     private boolean playerHasMovedOneFullBlockOnXZAxis(Location currentLocation) {
-        if ((int) currentLocation.getX() == (int) location.getX() && (int) currentLocation.getZ() == (int) location.getZ()) {
+        if ((int) currentLocation.getX() == (int) previousLocation.getX() && (int) currentLocation.getZ() == (int) previousLocation.getZ()) {
             return false;
         }
 
-        location = currentLocation;
+        previousLocation = currentLocation;
         return true;
     }
 
     private void placeBlockAtPlayer(PlayerMoveEvent event, Material material) {
         event.getPlayer().getWorld().getBlockAt(event.getPlayer().getLocation()).setType(material);
+    }
+
+    private void placeBlockAtLocation(Location location, Material material) {
+        location.getWorld().getBlockAt(location).setType(material);
     }
 
     private void announcePlayerPosition(PlayerMoveEvent event) {

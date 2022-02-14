@@ -15,3 +15,6 @@ commands:
   stairs:
     description: Blocks go brrrrr
     usage: /stairs
+  tnt:
+    description: Tnt go brrrrr
+    usage: /tnt
